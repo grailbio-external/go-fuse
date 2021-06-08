@@ -880,21 +880,25 @@ func (b *rawBridge) ReadDirPlus(cancel <-chan struct{}, input *fuse.ReadIn, out 
 			return fuse.OK
 		}
 
-		child, errno := b.lookup(ctx, n, e.Name, entryOut)
-		if errno != 0 {
-			if b.options.NegativeTimeout != nil {
-				entryOut.SetEntryTimeout(*b.options.NegativeTimeout)
-			}
+		if plusStream, ok := f.dirStream.(DirPlusStream); ok {
+			plusStream.Plus(entryOut)
 		} else {
-			b.addNewChild(n, e.Name, child, nil, 0, entryOut)
-			child.setEntryOut(entryOut)
-			b.setEntryOutTimeout(entryOut)
-			if (e.Mode &^ 07777) != (child.stableAttr.Mode &^ 07777) {
-				// should go back and change the
-				// already serialized entry
-				log.Panicf("mode mismatch between readdir %o and lookup %o", e.Mode, child.stableAttr.Mode)
+			child, errno := b.lookup(ctx, n, e.Name, entryOut)
+			if errno != 0 {
+				if b.options.NegativeTimeout != nil {
+					entryOut.SetEntryTimeout(*b.options.NegativeTimeout)
+				}
+			} else {
+				b.addNewChild(n, e.Name, child, nil, 0, entryOut)
+				child.setEntryOut(entryOut)
+				b.setEntryOutTimeout(entryOut)
+				if (e.Mode &^ 07777) != (child.stableAttr.Mode &^ 07777) {
+					// should go back and change the
+					// already serialized entry
+					log.Panicf("mode mismatch between readdir %o and lookup %o", e.Mode, child.stableAttr.Mode)
+				}
+				entryOut.Mode = child.stableAttr.Mode | (entryOut.Mode & 07777)
 			}
-			entryOut.Mode = child.stableAttr.Mode | (entryOut.Mode & 07777)
 		}
 	}
 
